@@ -4,7 +4,8 @@ const express = require("express");
 const ejs = require("ejs");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
-const md5 = require("md5");
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 const app = express();
 
 app.use(express.static("public"));
@@ -15,7 +16,7 @@ app.use(
   })
 );
 
-mongoose.connect("mongodb://localhost:27017/userDB", { useNewUrlParser: true });
+mongoose.connect("mongodb://127.0.0.1/userDB", { useNewUrlParser: true });
 
 const userSchema = new mongoose.Schema({
   email: String,
@@ -37,34 +38,41 @@ app.get("/login", function (req, res) {
 });
 
 app.post("/register", function (req, res) {
-  const newUser = new User({
-    email: req.body.username,
-    password: md5(req.body.password),
+  bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
+    // Store hash in your password DB.
+    if (!err) {
+      const newUser = new User({
+        email: req.body.username,
+        password: hash,
+      });
+      newUser
+        .save()
+        .then(function () {
+          res.render("secrets");
+        })
+        .catch(function (e) {
+          console.log(e);
+        });
+    }
   });
-  newUser
-    .save()
-    .then(function () {
-      res.render("secrets");
-    })
-    .catch(function (e) {
-      console.log(e);
-    });
 });
 
 app.post("/login", function (req, res) {
   const username = req.body.username;
-  const password = md5(req.body.password);
-  User.findOne({ email: username })
-    .then(function (foundUser) {
-      if (foundUser.password == password) {
-        res.render("secrets");
-      } else {
-        console.log("password incorrect");
+
+  User.findOne({ email: username }).then(function (foundUser) {
+    bcrypt.compare(
+      req.body.password,
+      foundUser.password,
+      function (err, result) {
+        if (result == true) {
+          res.render("secrets");
+        } else {
+          console.log("Incorrect passwort!");
+        }
       }
-    })
-    .catch(function (err) {
-      console.log(err);
-    });
+    );
+  });
 });
 
 app.listen(3000, function () {
